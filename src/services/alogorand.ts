@@ -20,7 +20,7 @@ export enum AlgorandAssetHolding {
 }
 
 export enum AlograndPendingTransaction {
-    ASSET_INDEX = 'asset-index'
+  ASSET_INDEX = "asset-index",
 }
 
 export enum AlgorandCreatedAsset {
@@ -153,7 +153,7 @@ export interface AlgorandCreateAssetOptions {
     fee?: number;
     flatFee?: boolean;
   };
-  address: string;
+  fromAddress: string;
   note: Uint8Array;
   totalIssuance: number;
   decimals: number;
@@ -173,7 +173,7 @@ const createAsset = async (
 ) => {
   const {
     customFee: { fee, flatFee },
-    address,
+    fromAddress,
     note,
     totalIssuance,
     decimals,
@@ -203,7 +203,7 @@ const createAsset = async (
 
   console.log("Create asset params:", params);
   return algosdk.makeAssetCreateTxnWithSuggestedParams(
-    address,
+    fromAddress,
     note,
     totalIssuance,
     decimals,
@@ -225,20 +225,83 @@ const signTransaction = (account: Account, transaction: Transaction) => {
 };
 
 export interface AlgorandTransaction {
-    txId: string
+  txId: string;
 }
-const sendRawSignedTransaction = async (algodClient: Algodv2, rawTransaction: Uint8Array) => {
-    const transaction = await algodClient.sendRawTransaction(rawTransaction).do() as AlgorandTransaction
-    console.log(`Asset creation transaction: ${transaction.txId}`)
-    return transaction
+const sendRawSignedTransaction = async (
+  algodClient: Algodv2,
+  rawTransaction: Uint8Array
+) => {
+  const transaction = (await algodClient
+    .sendRawTransaction(rawTransaction)
+    .do()) as AlgorandTransaction;
+  console.log(`Transaction: ${transaction.txId}`);
+  return transaction;
+};
+
+const getPendingAssetInfo = async (
+  algodClient: Algodv2,
+  transaction: AlgorandTransaction
+) => {
+  const pendingTransaction = await algodClient
+    .pendingTransactionInformation(transaction.txId)
+    .do();
+  console.log("pending txn", pendingTransaction);
+  return pendingTransaction;
+};
+
+export interface AlgorandConfigureAssetOptions {
+  customFee: {
+    fee?: number;
+    flatFee?: boolean;
+  };
+  fromAddress: string;
+  note: Uint8Array;
+  assetId: number;
+  managerAddress: string;
+  reserveAddress: string;
+  freezeAddress: string;
+  clawbackAddress: string;
 }
 
-const getPendingAssetInfo = async (algodClient: Algodv2, transaction: AlgorandTransaction) => {
-    const pendingTransaction = await algodClient.pendingTransactionInformation(transaction.txId).do()
-    console.log('pending txn', pendingTransaction)
-    return pendingTransaction
-}
- 
+const configureAsset = async (
+  algodClient: Algodv2,
+  options: AlgorandConfigureAssetOptions
+) => {
+  const {
+    customFee: { fee, flatFee },
+    fromAddress,
+    note,
+    assetId,
+    managerAddress,
+    reserveAddress,
+    freezeAddress,
+    clawbackAddress,
+  } = options;
+  let params = await algodClient.getTransactionParams().do();
+
+  if (fee && flatFee) {
+    console.log(`Using custom fee: ${fee} w/flatFee ${flatFee}`);
+    params = {
+      ...params,
+      fee,
+      flatFee,
+    };
+  }
+
+  const configTransaction = algosdk.makeAssetConfigTxnWithSuggestedParams(
+    fromAddress,
+    note,
+    assetId,
+    managerAddress,
+    reserveAddress,
+    freezeAddress,
+    clawbackAddress,
+    params
+  );
+
+  return configTransaction
+};
+
 const AlgorandService = {
   generateAccount,
   retrievePrivateKeyMnemonic,
@@ -249,7 +312,8 @@ const AlgorandService = {
   createAsset,
   signTransaction,
   sendRawSignedTransaction,
-  getPendingAssetInfo
+  getPendingAssetInfo,
+  configureAsset
 };
 
 export default AlgorandService;

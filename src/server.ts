@@ -1,6 +1,6 @@
 import algosdk, { signTransaction } from 'algosdk'
 import config from './config/index'
-import AlgorandService, {  AlgorandAccount, AlograndPendingTransaction } from './utils/alogorand'
+import AlgorandService, {  AlgorandAccount, AlograndPendingTransaction } from './services/alogorand'
 
 
 
@@ -20,7 +20,7 @@ const run = async () => {
             flatFee: true
         },
         note: algosdk.encodeObj({ hello: "showing prefix"}),
-        address: account1Address,
+        fromAddress: account1Address,
         defaultFrozen: false,
         decimals: 0,
         totalIssuance: 1000,
@@ -38,8 +38,6 @@ const run = async () => {
 
     const transaction = await AlgorandService.sendRawSignedTransaction(algodClient, rawSignedTransaction)
 
-    // let assetId = null
-
     await AlgorandService.waitForConfirmation(algodClient, transaction.txId)
 
     const pendingTransaction = await AlgorandService.getPendingAssetInfo(algodClient, transaction)
@@ -50,6 +48,27 @@ const run = async () => {
 
     await AlgorandService.printAssetHolding(algodClient, account1Address, assetId)
 
+    const configuredAsset = await AlgorandService.configureAsset(algodClient, {
+        assetId,
+        customFee: {
+            fee: 1000,
+            flatFee: true
+        },
+        note: algosdk.encodeObj({ hello: "showing prefix"}),
+        fromAddress: account2Address,
+        managerAddress: account1Address,
+        reserveAddress: account2Address,
+        freezeAddress: account2Address,
+        clawbackAddress: account2Address
+    })
+
+    const rawSignedConfigTransaction = AlgorandService.signTransaction(recoveredAccount2, configuredAsset)
+
+    const configTransaction = await AlgorandService.sendRawSignedTransaction(algodClient, rawSignedConfigTransaction)
+
+    await AlgorandService.waitForConfirmation(algodClient, configTransaction.txId)
+
+    await AlgorandService.printCreatedAsset(algodClient, account1Address, assetId)
 }
 
 
