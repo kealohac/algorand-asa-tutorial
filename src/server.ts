@@ -1,75 +1,46 @@
-import algosdk, { signTransaction } from 'algosdk'
-import config from './config/index'
-import AlgorandService, {  AlgorandAccount, AlograndPendingTransaction } from './services/alogorand'
+import algosdk, { Account, Algodv2, signTransaction } from "algosdk";
+import config from "./config/index";
+import { AlgorandService } from "./services/algorand";
+import AlgorandUtils, {
+  AlgorandAccount,
+  AlograndPendingTransaction,
+} from "./utils/alogorand";
 
 
 
 const run = async () => {
+  const account1 = AlgorandUtils.retrieveAccountAddress(
+    config.mnemonic.account1
+  );
+  const account2 = AlgorandUtils.retrieveAccountAddress(
+    config.mnemonic.account2
+  );
+  const account3 = AlgorandUtils.retrieveAccountAddress(
+    config.mnemonic.account3
+  );
 
-    const recoveredAccount1 = AlgorandService.retrieveAccountAddress(config.mnemonic.account1)
-    const recoveredAccount2 = AlgorandService.retrieveAccountAddress(config.mnemonic.account2)
-    const recoveredAccount3 = AlgorandService.retrieveAccountAddress(config.mnemonic.account3)
+  const algodClient = new algosdk.Algodv2(
+    config.algorand.token,
+    config.algorand.server,
+    config.algorand.port
+  );
+  const account1Address = account1[AlgorandAccount.ADDRESS];
+  const account2Address = account2[AlgorandAccount.ADDRESS];
+  const account3Address = account3[AlgorandAccount.ADDRESS];
 
-    const algodClient = new algosdk.Algodv2(config.algorand.token, config.algorand.server, config.algorand.port);
-    const account1Address = recoveredAccount1[AlgorandAccount.ADDRESS];
-    const account2Address = recoveredAccount2[AlgorandAccount.ADDRESS];
+  const assetId = 27;
 
-    const createdAsset = await AlgorandService.createAsset(algodClient, {
-        customFee: {
-            fee: 1000,
-            flatFee: true
-        },
-        note: algosdk.encodeObj({ hello: "showing prefix"}),
-        fromAddress: account1Address,
-        defaultFrozen: false,
-        decimals: 0,
-        totalIssuance: 1000,
-        unitName: "LATINUM",
-        assetName: "latinum",
-        assetURL: 'http://someurl',
-        assetMetadataHash: '16efaa3924a6fd9d3a4824799a4ac65d',
-        managerAddress: account2Address,
-        reserveAddress: account2Address,
-        freezeAddress: account2Address,
-        clawbackAddress: account2Address
-    });
+    //   const assetId = await AlgorandService.createAsset(algodClient, account1, account2)
 
-    const rawSignedTransaction = AlgorandService.signTransaction(recoveredAccount1, createdAsset)
+    //   await AlgorandService.configureAsset(algodClient, assetId, account2, account1)
 
-    const transaction = await AlgorandService.sendRawSignedTransaction(algodClient, rawSignedTransaction)
+    //   await AlgorandService.optInForAssetTransfer(algodClient, assetId, account3)
 
-    await AlgorandService.waitForConfirmation(algodClient, transaction.txId)
+    //   await AlgorandService.transferAsset(algodClient, assetId, account1, account3)
 
-    const pendingTransaction = await AlgorandService.getPendingAssetInfo(algodClient, transaction)
+    // await AlgorandService.freezeAsset(algodClient, assetId, account2, account3)
 
-    const assetId = pendingTransaction[AlograndPendingTransaction.ASSET_INDEX]
+    // await AlgorandService.unfreezeAsset(algodClient, assetId, account2, account3)
+};
 
-    await AlgorandService.printCreatedAsset(algodClient, account1Address, assetId)
-
-    await AlgorandService.printAssetHolding(algodClient, account1Address, assetId)
-
-    const configuredAsset = await AlgorandService.configureAsset(algodClient, {
-        assetId,
-        customFee: {
-            fee: 1000,
-            flatFee: true
-        },
-        note: algosdk.encodeObj({ hello: "showing prefix"}),
-        fromAddress: account2Address,
-        managerAddress: account1Address,
-        reserveAddress: account2Address,
-        freezeAddress: account2Address,
-        clawbackAddress: account2Address
-    })
-
-    const rawSignedConfigTransaction = AlgorandService.signTransaction(recoveredAccount2, configuredAsset)
-
-    const configTransaction = await AlgorandService.sendRawSignedTransaction(algodClient, rawSignedConfigTransaction)
-
-    await AlgorandService.waitForConfirmation(algodClient, configTransaction.txId)
-
-    await AlgorandService.printCreatedAsset(algodClient, account1Address, assetId)
-}
-
-
-run()
+run();

@@ -47,6 +47,25 @@ const retrieveAccountAddress = (mnemonic: string) => {
   return address;
 };
 
+const getTransactionParams = async (
+  algodClient: Algodv2,
+  fee?: number,
+  flatFee?: boolean
+) => {
+  let params = await algodClient.getTransactionParams().do();
+
+  if (fee && flatFee) {
+    console.log(`Using custom fee: ${fee} w/flatFee ${flatFee}`);
+    params = {
+      ...params,
+      fee,
+      flatFee,
+    };
+  }
+
+  return params;
+};
+
 // Function used to wait for a tx confirmation
 const waitForConfirmation = async (algodClient: Algodv2, txId: string) => {
   const status = await algodClient.status().do();
@@ -76,7 +95,7 @@ const waitForConfirmation = async (algodClient: Algodv2, txId: string) => {
 const printCreatedAsset = async (
   algodClient: Algodv2,
   accountAddress: string,
-  assetId: string
+  assetId: number
 ) => {
   const accountInfo = await algodClient.accountInformation(accountAddress).do();
   const createdAssets = accountInfo[AlgorandAccountInfo.CREATED_ASSETS];
@@ -117,7 +136,7 @@ const printCreatedAsset = async (
 const printAssetHolding = async (
   algodClient: Algodv2,
   accountAddress: string,
-  assetId: string
+  assetId: number
 ) => {
   const accountInfo = await algodClient.accountInformation(accountAddress).do();
   const assetHoldings = accountInfo[AlgorandAccountInfo.ASSET_HOLDINGS];
@@ -153,15 +172,12 @@ export interface AlgorandCreateAssetOptions {
     fee?: number;
     flatFee?: boolean;
   };
-  fromAddress: string;
+  creatorAccount: Account;
+  managerAccount: Account;
   note: Uint8Array;
   totalIssuance: number;
   decimals: number;
   defaultFrozen: boolean;
-  managerAddress: string;
-  reserveAddress: string;
-  freezeAddress: string;
-  clawbackAddress: string;
   unitName: string;
   assetName: string;
   assetURL: string;
@@ -173,37 +189,29 @@ const createAsset = async (
 ) => {
   const {
     customFee: { fee, flatFee },
-    fromAddress,
+    creatorAccount,
     note,
     totalIssuance,
     decimals,
     defaultFrozen,
-    managerAddress,
-    reserveAddress,
-    freezeAddress,
-    clawbackAddress,
+    managerAccount,
     unitName,
     assetName,
     assetURL,
     assetMetadataHash,
   } = options;
 
-  let params = await algodClient.getTransactionParams().do();
+  const params = await getTransactionParams(algodClient, fee, flatFee);
 
-  if (fee && flatFee) {
-    console.log(`Using custom fee: ${fee} w/flatFee ${flatFee}`);
-    params = {
-      ...params,
-      fee,
-      flatFee,
-    };
-  }
-
-  // let note = algosdk.encodeObj("showing prefix");
+  const creatorAddress = creatorAccount[AlgorandAccount.ADDRESS];
+  const managerAddress = managerAccount[AlgorandAccount.ADDRESS];
+  const reserveAddress = managerAddress;
+  const freezeAddress = managerAddress;
+  const clawbackAddress = managerAddress;
 
   console.log("Create asset params:", params);
   return algosdk.makeAssetCreateTxnWithSuggestedParams(
-    fromAddress,
+    creatorAddress,
     note,
     totalIssuance,
     decimals,
@@ -254,13 +262,10 @@ export interface AlgorandConfigureAssetOptions {
     fee?: number;
     flatFee?: boolean;
   };
-  fromAddress: string;
+  managerAccount: Account;
+  newManagerAccount: Account;
   note: Uint8Array;
   assetId: number;
-  managerAddress: string;
-  reserveAddress: string;
-  freezeAddress: string;
-  clawbackAddress: string;
 }
 
 const configureAsset = async (
@@ -269,51 +274,206 @@ const configureAsset = async (
 ) => {
   const {
     customFee: { fee, flatFee },
-    fromAddress,
+    managerAccount,
     note,
     assetId,
-    managerAddress,
-    reserveAddress,
-    freezeAddress,
-    clawbackAddress,
+    newManagerAccount,
   } = options;
-  let params = await algodClient.getTransactionParams().do();
+  const params = await getTransactionParams(algodClient, fee, flatFee);
 
-  if (fee && flatFee) {
-    console.log(`Using custom fee: ${fee} w/flatFee ${flatFee}`);
-    params = {
-      ...params,
-      fee,
-      flatFee,
-    };
-  }
+  const newManagerAddress = newManagerAccount[AlgorandAccount.ADDRESS];
+  const managerAddress = managerAccount[AlgorandAccount.ADDRESS];
+  const reserveAddress = managerAddress;
+  const freezeAddress = managerAddress;
+  const clawbackAddress = managerAddress;
 
   const configTransaction = algosdk.makeAssetConfigTxnWithSuggestedParams(
-    fromAddress,
+    managerAddress,
     note,
     assetId,
-    managerAddress,
+    newManagerAddress,
     reserveAddress,
     freezeAddress,
     clawbackAddress,
     params
   );
 
-  return configTransaction
+  return configTransaction;
 };
 
-const AlgorandService = {
+const submitTransactionToBlockchain = async (
+  algodClient: Algodv2,
+  asset: Transaction,
+  signingAccount: Account
+) => {
+  const rawSignedTransaction = signTransaction(signingAccount, asset);
+
+  const transaction = await sendRawSignedTransaction(
+    algodClient,
+    rawSignedTransaction
+  );
+
+  await waitForConfirmation(algodClient, transaction.txId);
+
+  return transaction;
+};
+
+export interface AlgorandOptInOptions {
+  customFee: {
+    fee?: number;
+    flatFee?: boolean;
+  };
+  note: Uint8Array;
+  assetId: number;
+  recipientAccount: Account;
+  revocationTarget?: string;
+  closeRemainderTo?: string;
+}
+
+const optInForAssetTransfer = async (
+  algodClient: Algodv2,
+  options: AlgorandOptInOptions
+) => {
+  const {
+    customFee: { fee, flatFee },
+    recipientAccount,
+    note,
+    assetId,
+    revocationTarget,
+    closeRemainderTo,
+  } = options;
+
+  const params = await getTransactionParams(algodClient, fee, flatFee);
+
+  const amount = 0;
+
+  const recipientAddress = recipientAccount[AlgorandAccount.ADDRESS];
+
+  const optInTransaction = algosdk.makeAssetTransferTxnWithSuggestedParams(
+    recipientAddress,
+    recipientAddress,
+    closeRemainderTo,
+    revocationTarget,
+    amount,
+    note,
+    assetId,
+    params
+  );
+
+  return optInTransaction;
+};
+
+export interface AlgorandTransferOptions {
+  customFee: {
+    fee?: number;
+    flatFee?: boolean;
+  };
+  senderAccount: Account;
+  recipientAccount: Account;
+  note: Uint8Array;
+  assetId: number;
+  amount: number;
+  revocationTarget?: string;
+  closeRemainderTo?: string;
+}
+
+const transferAsset = async (
+  algodClient: Algodv2,
+  options: AlgorandTransferOptions
+) => {
+  const {
+    customFee: { fee, flatFee },
+    senderAccount,
+    recipientAccount,
+    note,
+    assetId,
+    amount,
+    revocationTarget,
+    closeRemainderTo,
+  } = options;
+
+  const params = await getTransactionParams(algodClient, fee, flatFee);
+
+  console.log(`transferring assset with params`, params);
+
+  const senderAddress = senderAccount[AlgorandAccount.ADDRESS];
+
+  const recipientAddress = recipientAccount[AlgorandAccount.ADDRESS];
+
+  const transferTransaction = algosdk.makeAssetTransferTxnWithSuggestedParams(
+    senderAddress,
+    recipientAddress,
+    closeRemainderTo,
+    revocationTarget,
+    amount,
+    note,
+    assetId,
+    params
+  );
+
+  console.log(`transfer txn`, transferTransaction);
+
+  return transferTransaction;
+};
+
+export interface AlgorandFreezeOptions {
+  customFee: {
+    fee?: number;
+    flatFee?: boolean;
+  };
+  assetId: number;
+  requestorAccount: Account;
+  freezeTargetAccount: Account;
+  note: Uint8Array;
+}
+const freezeAsset = async (
+  algodClient: Algodv2,
+  options: AlgorandFreezeOptions,
+  freezeState = true
+) => {
+  const {
+    customFee: { fee, flatFee },
+    requestorAccount,
+    freezeTargetAccount,
+    note,
+    assetId,
+  } = options;
+
+  const params = await getTransactionParams(algodClient, fee, flatFee);
+
+  const fromAddress = requestorAccount[AlgorandAccount.ADDRESS];
+  const freezeTargetAddress = freezeTargetAccount[AlgorandAccount.ADDRESS];
+
+  const freezeTransaction = algosdk.makeAssetFreezeTxnWithSuggestedParams(
+    fromAddress,
+    note,
+    assetId,
+    freezeTargetAddress,
+    freezeState,
+    params
+  );
+
+  console.log(`freeze transaction`, freezeTransaction);
+
+  return freezeTransaction;
+};
+
+const AlgorandUtils = {
   generateAccount,
   retrievePrivateKeyMnemonic,
   retrieveAccountAddress,
-  waitForConfirmation,
+  // waitForConfirmation,
   printCreatedAsset,
   printAssetHolding,
   createAsset,
-  signTransaction,
-  sendRawSignedTransaction,
+  // signTransaction,
+  // sendRawSignedTransaction,
   getPendingAssetInfo,
-  configureAsset
+  configureAsset,
+  submitTransactionToBlockchain,
+  optInForAssetTransfer,
+  transferAsset,
+  freezeAsset,
 };
 
-export default AlgorandService;
+export default AlgorandUtils;
