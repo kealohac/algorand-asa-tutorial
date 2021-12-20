@@ -426,6 +426,7 @@ export interface AlgorandFreezeOptions {
   freezeTargetAccount: Account;
   note: Uint8Array;
 }
+
 const freezeAsset = async (
   algodClient: Algodv2,
   options: AlgorandFreezeOptions,
@@ -458,6 +459,90 @@ const freezeAsset = async (
   return freezeTransaction;
 };
 
+export interface AlgorandClawbackOptions {
+  customFee: {
+    fee?: number;
+    flatFee?: boolean;
+  };
+  assetId: number;
+  clawbackAccount: Account;
+  revocationTargetAccount: Account;
+  recipientAccount: Account;
+  note: Uint8Array;
+  amount: number;
+}
+
+const clawbackAsset = async (
+  algodClient: Algodv2,
+  options: AlgorandClawbackOptions
+) => {
+  const {
+    customFee: { fee, flatFee },
+    clawbackAccount,
+    revocationTargetAccount,
+    recipientAccount,
+    note,
+    assetId,
+    amount,
+  } = options;
+
+  const params = await getTransactionParams(algodClient, fee, flatFee);
+
+  const fromAddress = clawbackAccount[AlgorandAccount.ADDRESS];
+  const toAddress = recipientAccount[AlgorandAccount.ADDRESS];
+  const revocationTargetAddress =
+    revocationTargetAccount[AlgorandAccount.ADDRESS];
+
+  const closeRemainderTo = undefined;
+
+  const clawbackTransaction = algosdk.makeAssetTransferTxnWithSuggestedParams(
+    fromAddress,
+    toAddress,
+    closeRemainderTo,
+    revocationTargetAddress,
+    amount,
+    note,
+    assetId,
+    params
+  );
+
+  console.log('clawback transaction', clawbackTransaction)
+
+  return clawbackTransaction
+};
+
+export interface AlgorandDestroyOptions {
+  customFee: {
+    fee?: number;
+    flatFee?: boolean;
+  };
+  assetId: number;
+  managerAccount: Account;
+  note: Uint8Array;
+}
+
+const destroyAsset = async (
+  algodClient: Algodv2,
+  options: AlgorandDestroyOptions
+) => {
+  const {
+    customFee: { fee, flatFee },
+    managerAccount,
+    note,
+    assetId,
+  } = options;
+
+  const params = await getTransactionParams(algodClient, fee, flatFee);
+
+  const managerAddress = managerAccount[AlgorandAccount.ADDRESS]
+
+  const destroyTransaction = algosdk.makeAssetDestroyTxnWithSuggestedParams(managerAddress, note, assetId, params)
+
+  console.log('destroy transaction')
+
+  return destroyTransaction
+}
+
 const AlgorandUtils = {
   generateAccount,
   retrievePrivateKeyMnemonic,
@@ -474,6 +559,8 @@ const AlgorandUtils = {
   optInForAssetTransfer,
   transferAsset,
   freezeAsset,
+  clawbackAsset,
+  destroyAsset
 };
 
 export default AlgorandUtils;

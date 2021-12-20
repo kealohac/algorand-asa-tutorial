@@ -179,11 +179,55 @@ const unfreezeAsset = async (
     await AlgorandUtils.submitTransactionToBlockchain(algodClient, unfreeze, requestorAccount)
   };
 
+const clawbackAsset = async (
+    algodClient: Algodv2,
+    assetId: number,
+    clawbackAccount: Account,
+    recipientAccount: Account,
+    revocationTargetAccount: Account,
+    amount: number
+  ) => {
+      const clawback = await AlgorandUtils.clawbackAsset(algodClient, {
+          assetId,
+          customFee: {
+            fee: 1000,
+            flatFee: true,
+          },
+          clawbackAccount,
+          recipientAccount,
+          revocationTargetAccount,
+          amount,
+          note: algosdk.encodeObj({ hello: "showing prefix" }),
+      })
+
+      await AlgorandUtils.submitTransactionToBlockchain(algodClient, clawback, clawbackAccount)
+  }
+
+  const destroyAsset = async (
+    algodClient: Algodv2,
+    assetId: number,
+    managerAccount: Account,
+  ) => {
+      const destroy = await AlgorandUtils.destroyAsset(algodClient, {
+          assetId,
+          customFee: {
+            fee: 1000,
+            flatFee: true,
+          },
+          managerAccount,
+          note: algosdk.encodeObj({ hello: "showing prefix" }),
+      })
+
+      await AlgorandUtils.submitTransactionToBlockchain(algodClient, destroy, managerAccount)
+  }
+
 export const AlgorandService = {
   createAsset,
   configureAsset,
   optInForAssetTransfer,
   transferAsset,
   freezeAsset,
-  unfreezeAsset
+  unfreezeAsset,
+  clawbackAsset,
+  destroyAsset
 };

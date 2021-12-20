@@ -28,7 +28,7 @@ const run = async () => {
   const account2Address = account2[AlgorandAccount.ADDRESS];
   const account3Address = account3[AlgorandAccount.ADDRESS];
 
-  const assetId = 27;
+  const assetId = 9;
 
     //   const assetId = await AlgorandService.createAsset(algodClient, account1, account2)
 
@@ -41,6 +41,10 @@ const run = async () => {
     // await AlgorandService.freezeAsset(algodClient, assetId, account2, account3)
 
     // await AlgorandService.unfreezeAsset(algodClient, assetId, account2, account3)
+
+    // await AlgorandService.clawbackAsset(algodClient, assetId, account2, account1, account3, 8)
+
+    await AlgorandService.destroyAsset(algodClient, assetId, account1)
 };
 
 run();
